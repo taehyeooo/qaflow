@@ -1,0 +1,80 @@
+{
+  "label": "내 서비스 로컬 서버 + 개발 DB, 테스트 계정 user 1, iPhone SE 시뮬레이터",
+  "db": {
+    "cmd": "psql \"$DEV_DATABASE_URL\" -At -c"
+  },
+  "data": {
+    "idColumn": "id",
+    "tables": [
+      {
+        "name": "orders",
+        "owner": "user_id = 1"
+      },
+      {
+        "name": "order_items",
+        "owner": "order_id in (select id from orders where user_id = 1)"
+      }
+    ]
+  },
+  "env": {
+    "appDir": "~/my-app",
+    "simUdid": "00000000-0000-0000-0000-000000000000",
+    "simName": "My QA iPhone",
+    "appId": "com.example.app",
+    "metroPort": 8082,
+    "bundlerCmd": "npx expo start",
+    "launchWaitSeconds": 20,
+    "shotDir": "~/.config/qaflow/shots/my-app",
+    "token": {
+      "file": "~/.config/qaflow/my-app-token",
+      "maxAgeMinutes": 180,
+      "cmd": "echo '테스트 계정 토큰을 출력하는 명령'"
+    },
+    "tokenPatch": {
+      "file": "src/lib/auth.ts",
+      "marker": "QA_TOKEN",
+      "find": "원래 코드 한 부분(정확히 한 번 나와야 함)",
+      "replace": "QA 토큰을 먼저 쓰게 바꾼 코드(QA_TOKEN 포함)"
+    },
+    "vars": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://localhost:8080",
+      "EXPO_PUBLIC_QA_TOKEN": "@token"
+    }
+  },
+  "quota": {
+    "cmd": "echo '오늘 외부 API 사용량을 출력하는 명령'"
+  },
+  "api": {
+    "suites": {
+      "default": {
+        "base": "http://localhost:8080",
+        "auth": "token",
+        "checks": [
+          {
+            "name": "health",
+            "path": "/health",
+            "expect": 200
+          },
+          {
+            "name": "내 주문",
+            "path": "/api/orders",
+            "expect": 200,
+            "jq": "type == \"array\""
+          }
+        ]
+      },
+      "prod-public": {
+        "base": "https://example.com",
+        "auth": "none",
+        "checks": [
+          {
+            "name": "인증 없이 401",
+            "path": "/api/orders",
+            "expect": 401
+          }
+        ]
+      }
+    }
+  },
+  "sheetColumns": 4
+}

@@ -1,0 +1,35 @@
+{
+  "name": "order-flow",
+  "description": "상품 담기 → 결제 처리 대기 → 주문 내역. iPhone SE 좌표(pt).",
+  "steps": [
+    {
+      "do": "tap",
+      "x": 187,
+      "y": 520,
+      "name": "담기"
+    },
+    {
+      "do": "tap",
+      "x": 187,
+      "y": 600,
+      "name": "결제"
+    },
+    {
+      "do": "wait-sql",
+      "name": "결제 처리",
+      "sql": "select status from orders where user_id = 1 order by id desc limit 1",
+      "match": "PAID|FAILED",
+      "timeout": 120
+    },
+    {
+      "do": "tap",
+      "x": 300,
+      "y": 645,
+      "name": "주문 내역"
+    },
+    {
+      "do": "shot",
+      "name": "결과"
+    }
+  ]
+}

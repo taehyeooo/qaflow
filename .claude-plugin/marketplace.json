@@ -1,0 +1,2 @@
+{ "name": "qaflow", "owner": { "name": "taehyeooo" },
+  "plugins": [ { "name": "qaflow", "source": "./", "description": "기능 QA 자동화" } ] }
