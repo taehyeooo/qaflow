@@ -12,7 +12,7 @@ if [ "$AUTH" = token ]; then
   bash "$DIR/env.sh" token >/dev/null
   TOKEN_FILE=$(expand "$(cfg .env.token.file "$HOME/.config/qaflow/token")"); hdr=(-H "Authorization: Bearer $(cat "$TOKEN_FILE")")
 fi
-pass=0; fail=0; t0=$(date +%s); tmp=$(mktemp)
+pass=0; fail=0; t0=$(date +%s); tmp=$(mktemp); ROWS="[]"
 while IFS= read -r c; do
   name=$(jq -r .name <<< "$c"); method=$(jq -r '.method // "GET"' <<< "$c"); path=$(jq -r .path <<< "$c")
   expect=$(jq -r '.expect // 200' <<< "$c"); cond=$(jq -r '.jq // empty' <<< "$c"); body=$(jq -c '.body // empty' <<< "$c")
@@ -24,7 +24,11 @@ while IFS= read -r c; do
   if [ "$ok" = 1 ] && [ -n "$cond" ]; then jq -e "$cond" "$tmp" >/dev/null 2>&1 || { ok=0; why="조건 불일치: $cond"; }; fi
   ms=$(awk -v t="$time" 'BEGIN{printf "%d", t*1000}')
   if [ "$ok" = 1 ]; then pass=$((pass+1)); printf ' ✓ %-34s %s %sms\n' "$name" "$code" "$ms"; else fail=$((fail+1)); printf ' ✗ %-34s %s\n' "$name" "$why"; fi
+  ROWS=$(jq -c --arg n "$name" --arg m "$method $path" --arg c "$code" --arg ms "$ms" --arg r "$( [ "$ok" = 1 ] && echo 통과 || echo "실패: $why")" '. + [[$n,$m,$c,"\($ms)ms",$r]]' <<< "$ROWS")
 done < <(jq -c "$P.checks[]" "$QAFLOW_CONFIG")
 rm -f "$tmp"; secs=$(( $(date +%s) - t0 ))
 log api "$S pass=$pass fail=$fail ${secs}s"; echo "API $S: 통과 $pass · 실패 $fail · ${secs}초 ($BASE)"
+echo "리포트: $(jq -n --argjson rows "$ROWS" --arg s "$S" --arg base "$BASE" --argjson p "$pass" --argjson f "$fail" '
+  {plugin:"qaflow", kind:"api", title:"API 확인 — \($s)", summary:"통과 \($p) · 실패 \($f)", env:$base, status:(if $f>0 then "fail" else "ok" end),
+   sections:[{heading:"결과", table:{columns:["이름","요청","코드","시간","결과"], rows:$rows}}]}' | report)"
 [ "$fail" = 0 ]

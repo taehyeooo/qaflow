@@ -30,13 +30,29 @@ assert find and s.count(find) == 1, "패치할 위치를 찾지 못했습니다(
 open(p, "w").write(s.replace(find, rep))
 PY
   fi
+  # 추가 임시 패치(예: 개발 경고 숨기기) — 원본은 state에 두고 stop에서 되돌린다
+  i=0
+  while IFS= read -r ptc; do
+    pf=$(jq -r .file <<< "$ptc"); [ -n "$pf" ] || continue
+    if ! grep -q "$(jq -r '.marker // "QA_"' <<< "$ptc")" "$pf"; then
+      cp "$pf" "$STATE/extra-$i.orig"; echo "$pf" > "$STATE/extra-$i.path"
+      python3 - "$pf" "$(jq -r .find <<< "$ptc")" "$(jq -r .replace <<< "$ptc")" <<'PY'
+import sys
+p, find, rep = sys.argv[1:4]
+s = open(p).read()
+assert find and s.count(find) == 1, "추가 패치 위치를 찾지 못했습니다"
+open(p, "w").write(s.replace(find, rep))
+PY
+    fi
+    i=$((i+1))
+  done < <(jq -c '.env.extraPatches[]?' "$QAFLOW_CONFIG")
   BUNDLER=$(e bundlerCmd)  # 비우면 번들러·번들 주소 단계를 건너뛴다(웹뷰가 아닌 일반 빌드 앱, 서버만 QA 등)
   if [ -n "$BUNDLER" ]; then
   lsof -ti tcp:"$PORT" | xargs kill 2>/dev/null || true
   env_args=()
   while IFS=$'\t' read -r k v; do
     [ -z "$k" ] && continue
-    case "$v" in @file:*) v=$(cat "$(expand "${v#@file:}")") ;; @token) v=$(cat "$TOKEN_FILE") ;; esac
+    case "$v" in @file:*) v=$(cat "$(expand "${v#@file:}")") ;; @token) v=$( [ "${QAFLOW_NO_TOKEN:-0}" = 1 ] || cat "$TOKEN_FILE") ;; esac
     env_args+=("$k=$v")
   done < <(jq -r '.env.vars // {} | to_entries[] | [.key, .value] | @tsv' "$QAFLOW_CONFIG")
   (env ${env_args[@]+"${env_args[@]}"} nohup $BUNDLER --port "$PORT" > "$STATE/bundler.log" 2>&1 &)
@@ -45,12 +61,23 @@ PY
   fi
   xcrun simctl terminate "$UDID" "$APP_ID" 2>/dev/null || true
   xcrun simctl launch "$UDID" "$APP_ID" >/dev/null; open -a Simulator; sleep "$(e launchWaitSeconds 20)"
-  date +%s > "$STATE/qa-start"; log start; echo "QA 준비 완료 — 화면: $(shot start)" ;;
+  [ -f "$STATE/qa-start" ] || date +%s > "$STATE/qa-start"
+  log start "$( [ "${QAFLOW_NO_TOKEN:-0}" = 1 ] && echo 로그아웃 || echo 테스트 계정)"; echo "QA 준비 완료 — 화면: $(shot start)" ;;
+relaunch) xcrun simctl terminate "$UDID" "$APP_ID" 2>/dev/null || true; xcrun simctl launch "$UDID" "$APP_ID" >/dev/null; sleep "$(e relaunchWaitSeconds 8)"; log relaunch ;;
+device)  # device <글자 크기> <light|dark> <동작 줄이기 true|false>
+  xcrun simctl ui "$UDID" content_size "${2:-large}"; xcrun simctl ui "$UDID" appearance "${3:-light}"
+  xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility ReduceMotionEnabled -bool "${4:-false}"
+  echo "${2:-large}" > "$STATE/text-size"
+  log device "$2 $3 reduceMotion=$4"; echo "기기: 글자 ${2:-large} · ${3:-light} · 동작 줄이기 ${4:-false}" ;;
+keychain-reset) xcrun simctl keychain "$UDID" reset; log keychain-reset; echo "키체인 초기화(처음 설치 상태)" ;;
 stop)
   [ -n "$APP" ] && cd "$APP"
   [ -f "$STATE/patch.orig" ] && cp "$STATE/patch.orig" "$PATCH_FILE" && rm "$STATE/patch.orig"
+  for o in "$STATE"/extra-*.orig; do [ -f "$o" ] || continue; pth=$(cat "${o%.orig}.path"); cp "$o" "$pth"; rm -f "$o" "${o%.orig}.path"; done
   xcrun simctl spawn "$UDID" defaults delete "$APP_ID" RCT_jsLocation 2>/dev/null || true
-  xcrun simctl ui "$UDID" content_size large; xcrun simctl terminate "$UDID" "$APP_ID" 2>/dev/null || true
+  xcrun simctl ui "$UDID" content_size large; xcrun simctl ui "$UDID" appearance light; rm -f "$STATE/text-size"
+  xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility ReduceMotionEnabled -bool false
+  xcrun simctl terminate "$UDID" "$APP_ID" 2>/dev/null || true
   lsof -ti tcp:"$PORT" | xargs kill 2>/dev/null || true
   left=$( [ -n "$PATCH_FILE" ] && grep -c "$PATCH_MARK" "$PATCH_FILE" || true ); left=${left:-0}
   if [ -f "$STATE/qa-start" ]; then

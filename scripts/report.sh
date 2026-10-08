@@ -15,3 +15,12 @@ grep -E $'\t(api|data-cleanup|data-ok|data-diff|quota)\t' "$U" 2>/dev/null | tai
 [ -f "$HOME/.config/qaflow/qa.log" ] && tail -1 "$HOME/.config/qaflow/qa.log" | jq -r '"- QA 한 번: \(.seconds)초, 탭 \(.taps)번, 남은 패치 \(.patchLeft)"'
 echo; echo "## 확인하지 못한 것"; echo "- (실기기·운영 서버·외부 앱 공유처럼 이 환경에서 못 본 것)"
 echo; echo "## 찾은 문제"; echo "| # | 무엇이 | 어디서 | 이번 변경 / 원래 있던 문제 | 제안 |"; echo "|---|---|---|---|---|"
+
+# HTML로도 남긴다(최근 시나리오 + 최근 기록)
+if [ -n "$RUN" ] && [ -f "$RUN" ]; then
+  echo; echo "리포트: $(jq --arg env "$(cfg .label "")" --arg recent "$(grep -E $'\t(api|data-cleanup|data-ok|data-diff|quota|persona)\t' "$U" 2>/dev/null | tail -8)" '
+    {plugin:"qaflow", kind:"qa-report", title:"QA 보고 — \(.name)", summary:"전체 \(.totalSeconds)초\(if .failed then " · 실패" else "" end)", env:$env, status:(if .failed then "fail" else "ok" end),
+     sections:([{heading:"시나리오 단계", table:{columns:["#","단계","이름","시간","결과"], rows:[.steps|to_entries[]|[(.key+1|tostring),.value.do,.value.name,"\(.value.seconds)초",.value.result]]}}]
+       + (if .sheet != "" then [{heading:"캡처", images:[{label:"단계별 캡처", path:.sheet}]}] else [] end)
+       + [{heading:"최근 기록", text:$recent}])}' "$RUN" | report)"
+fi

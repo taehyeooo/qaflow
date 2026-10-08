@@ -20,7 +20,10 @@ run)
     kind=$(jq -r .do <<< "$st"); label=$(jq -r '.name // .do' <<< "$st"); t0=$(date +%s); shot=""; result="ok"
     case "$kind" in
       paste) bash "$ENV" paste "$(jq -r .text <<< "$st")" >/dev/null ;;
-      tap) shot=$(bash "$ENV" tap "$(jq -r .x <<< "$st")" "$(jq -r .y <<< "$st")" "$label" | tail -1) ;;
+      tap)  # 글자 크기마다 위치가 바뀌는 요소는 "at": {"<글자 크기>": [x, y]}로 덮어쓴다
+        ts=$(cat "$STATE/text-size" 2>/dev/null || echo large)
+        x=$(jq -r --arg t "$ts" '.at[$t][0] // .x' <<< "$st"); y=$(jq -r --arg t "$ts" '.at[$t][1] // .y' <<< "$st")
+        shot=$(bash "$ENV" tap "$x" "$y" "$label" | tail -1) ;;
       shot) shot=$(bash "$ENV" shot "$label") ;;
       foreground) shot=$(bash "$ENV" foreground | tail -1) ;;
       background) bash "$ENV" background >/dev/null ;;
@@ -46,7 +49,13 @@ run)
   jq -n --arg id "$run_id" --arg name "$name" --arg at "$(date '+%F %T')" --argjson total "$total" --argjson failed "$failed" \
      --arg sheet "$sheet" --argjson steps "$steps" '{id:$id, name:$name, at:$at, totalSeconds:$total, failed:($failed==1), sheet:$sheet, steps:$steps}' > "$RUNS/$run_id.json"
   log scenario "$name ${total}s failed=$failed"
-  echo "끝: 전체 ${total}초 · 기록 $RUNS/$run_id.json · 캡처 묶음 ${sheet:-없음}"
+  rp=$(jq --arg env "$(cfg .label "$(basename "$QAFLOW_CONFIG" .json)")" '
+    {plugin:"qaflow", kind:"scenario", title:"시나리오 \(.name)", summary:"\(.steps|length)단계 · 전체 \(.totalSeconds)초\(if .failed then " · 실패" else "" end)",
+     env:$env, status:(if .failed then "fail" else "ok" end),
+     sections:([{heading:"단계", table:{columns:["#","단계","이름","걸린 시간","결과"], rows:[.steps|to_entries[]|[(.key+1|tostring),.value.do,.value.name,"\(.value.seconds)초",.value.result]]}},
+                {heading:"단계별 시간", bars:{unit:"초", items:[.steps[]|select(.seconds>0)|[.name,.seconds]]}}]
+               + (if .sheet != "" then [{heading:"캡처", images:[{label:"단계별 캡처 묶음", path:.sheet}]}] else [] end))}' "$RUNS/$run_id.json" | report)
+  echo "끝: 전체 ${total}초 · 기록 $RUNS/$run_id.json · 캡처 묶음 ${sheet:-없음} · 리포트 $rp"
   exit $failed ;;
 *) sed -n '2,8p' "$0"; exit 1 ;;
 esac

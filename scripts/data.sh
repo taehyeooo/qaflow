@@ -36,7 +36,10 @@ cleanup)
   done < <(tables)
   [ "$DRY" = 1 ] && { echo "미리보기: 모두 ${total}행"; exit 0; }
   log data-cleanup "${total}행"; echo "정리: 모두 ${total}행"
-  "$0" check ;;
+  chk=$("$0" check 2>&1) && st=ok || st=fail; echo "$chk" | grep -v '^리포트' || true
+  echo "리포트: $(jq -n --arg t "$total" --arg chk "$chk" --arg st "$st" --arg snap "$(jq -r .counts "$SNAP")" --arg env "$(cfg .label "")" '
+    {plugin:"qaflow", kind:"data-cleanup", title:"테스트 데이터 정리", summary:"QA로 생긴 \($t)행 삭제 · \($chk)", env:$env, status:$st,
+     sections:[{heading:"기준(QA 전)", text:$snap},{heading:"비교", text:$chk}]}' | report)" ;;
 check)
   [ -f "$SNAP" ] || { echo "기준이 없습니다" >&2; exit 1; }
   before=$(jq -r .counts "$SNAP"); now=$(counts)

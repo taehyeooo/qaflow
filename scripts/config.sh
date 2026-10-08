@@ -17,3 +17,5 @@ STATE="$HOME/.config/qaflow/state"; mkdir -p "$STATE"
 log() { echo "$(date '+%F %T')	$1	${2:-}" >> "$HOME/.config/qaflow/usage.log"; }
 # SQL 실행: 설정의 db.cmd 뒤에 SQL을 인자로 붙여 실행(결과를 출력하는 명령이면 DB 종류와 상관없음)
 sql() { bash -c "$(cfg .db.cmd) \"\$1\"" _ "$1"; }
+# HTML 리포트(모든 flow 플러그인 공용 위치 ~/.config/flow-reports, 목록 index.html)
+report() { local f; f=$(mktemp); cat > "$f"; python3 "$(dirname "${BASH_SOURCE[0]}")/report_html.py" "$f"; rm -f "$f"; }
