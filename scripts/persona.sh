@@ -23,6 +23,7 @@ run)
   [ -n "$ids" ] || { echo "고른 페르소나가 없습니다: $sel" >&2; exit 1; }
   run_id="$(date +%m%d-%H%M%S)-persona"; out="$RUNS/$run_id.json"; t_all=$(date +%s)
   jq -n --arg id "$run_id" --arg at "$(date '+%F %T')" --arg sel "$sel" --arg env "$(cfg .label "$CN")" '{id:$id, at:$at, selection:$sel, env:$env, personas:[]}' > "$out"
+  export QAFLOW_NO_SUBREPORT=1
   bash "$DATA" snapshot >/dev/null
   # 로그인 상태가 같은 페르소나끼리 묶어 번들러 재시작을 줄인다
   for auth in token none; do
