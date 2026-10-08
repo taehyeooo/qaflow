@@ -1,7 +1,7 @@
 {
   "name": "qaflow",
   "description": "기능 QA 자동화 — QA 환경 준비/원복, 시나리오 재생(탭·대기·캡처·시간), 테스트 데이터 자동 정리, API 스모크 테스트, QA 보고서. 서비스마다 설정 파일만 바꿔 쓴다",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": { "name": "taehyeooo" },
   "repository": "https://github.com/taehyeooo/qaflow",
   "license": "MIT",
